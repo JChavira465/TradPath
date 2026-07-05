@@ -1,0 +1,24 @@
+{
+  "name": "@tradpath/database",
+  "version": "0.0.1",
+  "private": true,
+  "main": "./generated/client/index.js",
+  "types": "./generated/client/index.d.ts",
+  "scripts": {
+    "generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:seed": "tsx prisma/seed.ts",
+    "studio": "prisma studio"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.19.1"
+  },
+  "devDependencies": {
+    "prisma": "^5.19.1",
+    "tsx": "^4.19.1",
+    "typescript": "^5.5.4",
+    "bcrypt": "^5.1.1",
+    "@types/bcrypt": "^5.0.2"
+  }
+}

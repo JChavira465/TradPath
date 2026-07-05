@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "TradPath",
+    "slug": "tradpath",
+    "scheme": "tradpath",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "backgroundColor": "#1B2A4A"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.tradpath.app"
+    },
+    "android": {
+      "package": "com.tradpath.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#1B2A4A"
+      }
+    },
+    "plugins": ["expo-router", "expo-secure-store"],
+    "extra": {
+      "eas": {
+        "projectId": "REPLACE_WITH_EAS_PROJECT_ID"
+      }
+    }
+  }
+}

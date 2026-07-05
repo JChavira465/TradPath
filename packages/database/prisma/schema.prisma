@@ -1,0 +1,1132 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/client"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─────────────────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────────────────
+
+enum SubscriptionPlan {
+  STARTER
+  GROWTH
+  PRO
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  SUSPENDED
+}
+
+enum UserRole {
+  OWNER
+  MANAGER
+  EMPLOYEE
+  TECHNICIAN
+}
+
+enum Platform {
+  WEB
+  MOBILE
+  ADMIN
+}
+
+enum PropertyType {
+  RESIDENTIAL
+  COMMERCIAL
+}
+
+enum PriceBookCategory {
+  LABOR
+  MATERIAL
+  SERVICE
+}
+
+enum ServiceOfferingPriceType {
+  FIXED
+  STARTING_AT
+  FREE_ESTIMATE
+}
+
+enum PhotoPhase {
+  BEFORE
+  DURING
+  AFTER
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  DECLINED
+  CANCELLED
+}
+
+enum JobStatus {
+  SCHEDULED
+  IN_PROGRESS
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
+enum JobPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum JobType {
+  ONE_TIME
+  RECURRING
+}
+
+enum JobPhotoType {
+  BEFORE
+  AFTER
+  DURING
+  SIGNATURE
+  DOCUMENT
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum EstimateStatus {
+  DRAFT
+  SENT
+  VIEWED
+  APPROVED
+  DECLINED
+  EXPIRED
+  CONVERTED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  VIEWED
+  PARTIAL
+  PAID
+  OVERDUE
+  VOID
+}
+
+enum InvoiceType {
+  ONE_TIME
+  SUBSCRIPTION
+}
+
+enum PaymentMethod {
+  STRIPE
+  CASH
+  CHECK
+  BANK_TRANSFER
+  OTHER
+}
+
+enum ServicePlanStatus {
+  ACTIVE
+  PAUSED
+  CANCELLED
+  EXPIRED
+}
+
+enum BillingCycle {
+  MONTHLY
+  ANNUAL
+}
+
+enum ServiceFrequency {
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+  QUARTERLY
+  BIANNUAL
+  ANNUAL
+}
+
+enum TimeEntryStatus {
+  ACTIVE
+  COMPLETED
+  APPROVED
+  REJECTED
+}
+
+// ─────────────────────────────────────────────────────────
+// ORGANIZATION / AUTH
+// ─────────────────────────────────────────────────────────
+
+model Organization {
+  id     String @id @default(cuid())
+  name   String
+  slug   String @unique
+  logo   String?
+  phone  String?
+  email  String?
+  website String?
+
+  address String?
+  city    String?
+  state   String?
+  zip     String?
+  timezone String @default("America/Chicago")
+  currency String @default("USD")
+
+  subscriptionPlan   SubscriptionPlan   @default(STARTER)
+  subscriptionStatus SubscriptionStatus @default(TRIALING)
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+  trialEndsAt          DateTime?
+
+  healthScore   Int?
+  internalNotes String?
+  internalTags  String[] @default([])
+
+  isSuspended  Boolean   @default(false)
+  isArchived   Boolean   @default(false)
+  suspendedAt  DateTime?
+
+  featureFlags Json @default("{}")
+
+  storageUsedBytes BigInt @default(0)
+  aiCreditsUsed    Int    @default(0)
+
+  bookingEnabled        Boolean @default(false)
+  bookingSlug           String? @unique
+  bookingPageTitle      String?
+  bookingPageDescription String?
+  bookingPageLogo       String?
+  bookingPageColor      String?
+
+  twilioPhoneNumber String?
+
+  morningBriefingEnabled Boolean @default(false)
+  morningBriefingTime    String  @default("07:00")
+  morningBriefingChannel String  @default("SMS")
+
+  defaultTaxRate       Decimal @default(0) @db.Decimal(6, 3)
+  defaultInvoiceTerms  String?
+  defaultInvoiceDueDays Int    @default(30)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users                 User[]
+  refreshTokens         RefreshToken[]
+  auditLogs             AuditLog[]
+  customers             Customer[]
+  priceBookItems        PriceBook[]
+  serviceCategories     ServiceCategory[]
+  serviceOfferings      ServiceOffering[]
+  jobPhotoCheckpoints   JobPhotoCheckpoint[]
+  bookingRequests       BookingRequest[]
+  bookingAvailability   BookingAvailability[]
+  bookingBlackouts      BookingBlackout[]
+  jobs                  Job[]
+  jobTextMessages       JobTextMessage[]
+  messageTemplates      MessageTemplate[]
+  estimates             Estimate[]
+  invoices              Invoice[]
+  payments              Payment[]
+  servicePlans          ServicePlan[]
+  timeEntries           TimeEntry[]
+  scheduleEvents        ScheduleEvent[]
+  notifications         Notification[]
+  supportTickets        SupportTicket[]
+  orgFeatureFlags       OrganizationFeatureFlag[]
+
+  @@index([slug])
+  @@index([bookingSlug])
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  firstName    String
+  lastName     String
+  phone        String?
+  avatarUrl    String?
+  role         UserRole @default(EMPLOYEE)
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  emailVerified Boolean @default(false)
+
+  mfaEnabled          Boolean   @default(false)
+  mfaSecretEncrypted  String?
+  mfaFailedAttempts   Int       @default(0)
+  mfaLockedUntil      DateTime?
+
+  isSuspended     Boolean   @default(false)
+  lastLoginAt     DateTime?
+  failedLoginCount Int      @default(0)
+  lockedUntil     DateTime?
+
+  isSuperAdmin Boolean @default(false)
+
+  pushToken    String?
+  pushTokenWeb String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  refreshTokens   RefreshToken[]
+  passwordResets  PasswordReset[]
+  auditLogs       AuditLog[]
+  createdJobs     Job[]              @relation("JobCreatedBy")
+  timeEntries     TimeEntry[]
+  notifications   Notification[]
+  supportTickets  SupportTicket[]
+
+  @@index([organizationId])
+}
+
+model RefreshToken {
+  id       String  @id @default(cuid())
+  userId   String
+  user     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  tokenHash          String    @unique
+  familyId           String
+  expiresAt          DateTime
+  revokedAt          DateTime?
+  replacedByTokenHash String?
+
+  ipAddress String?
+  userAgent String?
+  platform  Platform @default(WEB)
+
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([familyId])
+  @@index([organizationId])
+}
+
+model PasswordReset {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model AuditLog {
+  id             String  @id @default(cuid())
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  action     String
+  resource   String
+  resourceId String?
+  oldValue   Json?
+  newValue   Json?
+
+  ipAddress String?
+  userAgent String?
+
+  isSuperAdminAction Boolean  @default(false)
+  platform           Platform @default(WEB)
+
+  createdAt DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([userId])
+  @@index([resource, resourceId])
+}
+
+// ─────────────────────────────────────────────────────────
+// CRM
+// ─────────────────────────────────────────────────────────
+
+model Customer {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  firstName String
+  lastName  String
+  company   String?
+  email     String?
+  phone     String?
+  altPhone  String?
+
+  serviceAddress String?
+  billingAddress String?
+  city           String?
+  state          String?
+  zip            String?
+
+  propertyType    PropertyType @default(RESIDENTIAL)
+  propertyDetails Json?
+
+  tags  String[] @default([])
+  source String?
+  notes String?
+
+  outstandingBalance    Decimal @default(0) @db.Decimal(12, 2)
+  preferredContactMethod String @default("EMAIL")
+
+  // The Stripe Customer representing this record's owner for service-plan
+  // subscription billing (distinct from Organization.stripeCustomerId,
+  // which is the org's OWN TradPath subscription).
+  stripeCustomerId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  equipment     CustomerEquipment[]
+  jobs          Job[]
+  estimates     Estimate[]
+  invoices      Invoice[]
+  servicePlans  ServicePlan[]
+  jobTextMessages JobTextMessage[]
+
+  @@index([organizationId])
+  @@index([organizationId, email])
+  @@index([organizationId, phone])
+}
+
+model CustomerEquipment {
+  id             String       @id @default(cuid())
+  organizationId String
+  customerId     String
+  customer       Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  name           String
+  type           String?
+  make           String?
+  model          String?
+  serialNumber   String?
+  installDate    DateTime?
+  warrantyExpiry DateTime?
+  lastServiceDate DateTime?
+  nextServiceDate DateTime?
+  notes          String?
+  photos         Json @default("[]")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([customerId])
+}
+
+// ─────────────────────────────────────────────────────────
+// PRICE BOOK / SERVICES
+// ─────────────────────────────────────────────────────────
+
+model PriceBook {
+  id             String            @id @default(cuid())
+  organizationId String
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+  category    PriceBookCategory
+  unitPrice   Decimal @db.Decimal(12, 2)
+  unit        String  @default("each")
+  taxable     Boolean @default(true)
+  isActive    Boolean @default(true)
+  sortOrder   Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+}
+
+model ServiceCategory {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+  icon        String?
+  isActive    Boolean @default(true)
+  sortOrder   Int     @default(0)
+
+  offerings ServiceOffering[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+}
+
+model ServiceOffering {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  categoryId String?
+  category   ServiceCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  name        String
+  description String?
+  duration    Int? // minutes
+  price       Decimal? @db.Decimal(12, 2)
+  priceType   ServiceOfferingPriceType @default(FIXED)
+  isActive    Boolean @default(true)
+  isBookable  Boolean @default(false)
+  sortOrder   Int     @default(0)
+  requiredPhotos Json @default("[]")
+
+  photoCheckpoints JobPhotoCheckpoint[]
+  bookingRequests  BookingRequest[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([categoryId])
+}
+
+model JobPhotoCheckpoint {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  serviceOfferingId String
+  serviceOffering   ServiceOffering @relation(fields: [serviceOfferingId], references: [id], onDelete: Cascade)
+
+  label     String
+  required  Boolean    @default(true)
+  phase     PhotoPhase @default(BEFORE)
+  sortOrder Int        @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([serviceOfferingId])
+}
+
+// ─────────────────────────────────────────────────────────
+// BOOKING
+// ─────────────────────────────────────────────────────────
+
+model BookingRequest {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  firstName String
+  lastName  String
+  email     String
+  phone     String
+
+  serviceAddress String
+  city           String?
+  state          String?
+  zip            String?
+  propertyType   PropertyType @default(RESIDENTIAL)
+
+  serviceOfferingId String?
+  serviceOffering   ServiceOffering? @relation(fields: [serviceOfferingId], references: [id], onDelete: SetNull)
+
+  requestedDate     DateTime?
+  requestedTimeSlot String?
+  notes             String?
+
+  status BookingStatus @default(PENDING)
+
+  convertedToJobId String?
+  convertedAt      DateTime?
+
+  source           String  @default("BOOKING_PAGE")
+  confirmationCode String  @unique
+  ipAddress        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([organizationId, status])
+}
+
+model BookingAvailability {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  dayOfWeek Int // 0=Sunday .. 6=Saturday
+  startTime String // "08:00"
+  endTime   String // "17:00"
+  isActive  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+}
+
+model BookingBlackout {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  date   DateTime
+  reason String?
+
+  createdAt DateTime @default(now())
+
+  @@index([organizationId])
+}
+
+// ─────────────────────────────────────────────────────────
+// JOBS
+// ─────────────────────────────────────────────────────────
+
+model Job {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  bookingRequestId String?
+
+  jobNumber   String
+  title       String
+  description String?
+  status      JobStatus   @default(SCHEDULED)
+  priority    JobPriority @default(NORMAL)
+  type        JobType     @default(ONE_TIME)
+
+  serviceAddress String?
+  city           String?
+  state          String?
+  zip            String?
+  latitude       Float?
+  longitude      Float?
+
+  scheduledStart DateTime?
+  scheduledEnd   DateTime?
+  actualStart    DateTime?
+  actualEnd      DateTime?
+  estimatedDuration Int? // minutes
+
+  assignedUserIds String[] @default([])
+
+  laborCost    Decimal @default(0) @db.Decimal(12, 2)
+  materialCost Decimal @default(0) @db.Decimal(12, 2)
+  totalRevenue Decimal @default(0) @db.Decimal(12, 2)
+  profit       Decimal @default(0) @db.Decimal(12, 2)
+
+  internalNotes  String?
+  customerNotes  String?
+  completionNotes String?
+
+  servicePlanId String?
+
+  onMyWaySentAt              DateTime?
+  completionFlowStartedAt    DateTime?
+  completionFlowCompletedAt  DateTime?
+
+  voiceMemoUrl        String?
+  voiceMemoTranscript String?
+  aiInvoiceDraft      Json?
+
+  createdBy String
+  creator   User   @relation("JobCreatedBy", fields: [createdBy], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  photos          JobPhoto[]
+  textMessages    JobTextMessage[]
+  estimates       Estimate[]
+  invoices        Invoice[]
+  timeEntries     TimeEntry[]
+  scheduleEvents  ScheduleEvent[]
+  servicePlanJobs ServicePlanJob[]
+
+  @@unique([organizationId, jobNumber])
+  @@index([organizationId])
+  @@index([organizationId, status])
+  @@index([customerId])
+}
+
+model JobPhoto {
+  id     String @id @default(cuid())
+  jobId  String
+  job    Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  uploadedBy String
+
+  url          String
+  thumbnailUrl String?
+  type         JobPhotoType
+  checkpointId String?
+  lineItemIndex Int?
+
+  isCustomerVisible Boolean @default(true)
+  caption           String?
+
+  latitude  Float?
+  longitude Float?
+  takenAt   DateTime?
+  platform  Platform @default(MOBILE)
+
+  createdAt DateTime @default(now())
+
+  @@index([jobId])
+}
+
+model JobTextMessage {
+  id             String       @id @default(cuid())
+  jobId          String?
+  job            Job?         @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  direction MessageDirection
+  body      String
+  twilioSid String?
+
+  sentAt      DateTime?
+  deliveredAt DateTime?
+  createdBy   String?
+
+  createdAt DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([jobId])
+  @@index([customerId])
+}
+
+model MessageTemplate {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  name String
+  body String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+}
+
+// ─────────────────────────────────────────────────────────
+// ESTIMATES / INVOICES / PAYMENTS
+// ─────────────────────────────────────────────────────────
+
+model Estimate {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  jobId String?
+  job   Job?    @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  estimateNumber String
+  title          String
+  status         EstimateStatus @default(DRAFT)
+  validUntil     DateTime?
+
+  lineItems      Json
+  subtotal       Decimal @db.Decimal(12, 2)
+  taxRate        Decimal @default(0) @db.Decimal(6, 3)
+  taxAmount      Decimal @default(0) @db.Decimal(12, 2)
+  discountAmount Decimal @default(0) @db.Decimal(12, 2)
+  total          Decimal @db.Decimal(12, 2)
+
+  notes               String?
+  termsAndConditions  String?
+
+  sentAt      DateTime?
+  viewedAt    DateTime?
+  approvedAt  DateTime?
+  signatureUrl String?
+  pdfUrl      String?
+
+  createdBy String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, estimateNumber])
+  @@index([organizationId])
+  @@index([customerId])
+}
+
+model Invoice {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  jobId         String?
+  job           Job?    @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  estimateId    String?
+  servicePlanId String?
+
+  invoiceNumber String
+  status        InvoiceStatus @default(DRAFT)
+  type          InvoiceType   @default(ONE_TIME)
+  dueDate       DateTime?
+
+  lineItems      Json
+  subtotal       Decimal @db.Decimal(12, 2)
+  taxRate        Decimal @default(0) @db.Decimal(6, 3)
+  taxAmount      Decimal @default(0) @db.Decimal(12, 2)
+  discountAmount Decimal @default(0) @db.Decimal(12, 2)
+  total          Decimal @db.Decimal(12, 2)
+  amountPaid     Decimal @default(0) @db.Decimal(12, 2)
+  amountDue      Decimal @db.Decimal(12, 2)
+
+  notes              String?
+  termsAndConditions String?
+
+  stripePaymentIntentId String?
+  stripePaymentLinkUrl  String?
+  stripeInvoiceId       String?
+
+  includePhotos Boolean @default(false)
+  photoUrls     Json    @default("[]")
+
+  sentAt   DateTime?
+  viewedAt DateTime?
+  paidAt   DateTime?
+
+  followUp1SentAt DateTime?
+  followUp2SentAt DateTime?
+  followUp3SentAt DateTime?
+
+  createdBy String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  payments         Payment[]
+  servicePlanInvoice ServicePlanInvoice?
+
+  @@unique([organizationId, invoiceNumber])
+  @@index([organizationId])
+  @@index([organizationId, status])
+  @@index([customerId])
+}
+
+model Payment {
+  id             String       @id @default(cuid())
+  invoiceId      String
+  invoice        Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  amount          Decimal       @db.Decimal(12, 2)
+  method          PaymentMethod @default(STRIPE)
+  stripePaymentId String?
+  reference       String?
+  notes           String?
+
+  paidAt    DateTime @default(now())
+  createdBy String?
+
+  createdAt DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([invoiceId])
+}
+
+// ─────────────────────────────────────────────────────────
+// RECURRING SERVICE PLANS
+// ─────────────────────────────────────────────────────────
+
+model ServicePlan {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+  status      ServicePlanStatus @default(ACTIVE)
+  billingCycle BillingCycle     @default(MONTHLY)
+  price        Decimal          @db.Decimal(12, 2)
+
+  stripePriceId        String?
+  stripeSubscriptionId String?
+
+  nextBillingDate DateTime?
+  nextServiceDate DateTime?
+  serviceFrequency ServiceFrequency @default(MONTHLY)
+  serviceDescription String?
+
+  assignedUserIds String[] @default([])
+  autoGenerateJobs Boolean @default(true)
+  autoSendInvoice  Boolean @default(true)
+  jobTemplate      Json?
+
+  discountPercent Decimal @default(0) @db.Decimal(5, 2)
+
+  startDate     DateTime  @default(now())
+  endDate       DateTime?
+  cancelledAt   DateTime?
+  cancelReason  String?
+
+  isPublic         Boolean @default(false)
+  publicName       String?
+  publicDescription String?
+
+  createdBy String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  jobs     ServicePlanJob[]
+  invoices ServicePlanInvoice[]
+
+  @@index([organizationId])
+  @@index([customerId])
+  @@index([organizationId, status])
+}
+
+model ServicePlanJob {
+  id            String      @id @default(cuid())
+  servicePlanId String
+  servicePlan   ServicePlan @relation(fields: [servicePlanId], references: [id], onDelete: Cascade)
+
+  jobId String @unique
+  job   Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  scheduledFor DateTime
+  generatedAt  DateTime @default(now())
+
+  @@index([servicePlanId])
+}
+
+model ServicePlanInvoice {
+  id            String      @id @default(cuid())
+  servicePlanId String
+  servicePlan   ServicePlan @relation(fields: [servicePlanId], references: [id], onDelete: Cascade)
+
+  invoiceId String  @unique
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  billingPeriodStart DateTime
+  billingPeriodEnd   DateTime
+  generatedAt        DateTime @default(now())
+
+  @@index([servicePlanId])
+  @@unique([servicePlanId, billingPeriodStart, billingPeriodEnd])
+}
+
+// ─────────────────────────────────────────────────────────
+// TIME TRACKING / SCHEDULING
+// ─────────────────────────────────────────────────────────
+
+model TimeEntry {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  jobId String?
+  job   Job?    @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  clockIn  DateTime
+  clockOut DateTime?
+
+  clockInLat  Float?
+  clockInLng  Float?
+  clockOutLat Float?
+  clockOutLng Float?
+
+  breakMinutes  Int     @default(0)
+  totalHours    Decimal? @db.Decimal(6, 2)
+  overtimeHours Decimal  @default(0) @db.Decimal(6, 2)
+  regularHours  Decimal  @default(0) @db.Decimal(6, 2)
+
+  status TimeEntryStatus @default(ACTIVE)
+  notes  String?
+
+  approvedBy String?
+  approvedAt DateTime?
+  platform   Platform @default(MOBILE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([userId])
+  @@index([jobId])
+}
+
+model ScheduleEvent {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  jobId String?
+  job   Job?    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String?
+
+  assignedUserIds String[] @default([])
+
+  start DateTime
+  end   DateTime
+  allDay Boolean @default(false)
+  color  String?
+
+  recurrenceRule  String?
+  reminderSentAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([jobId])
+  @@index([organizationId, start, end])
+}
+
+// ─────────────────────────────────────────────────────────
+// NOTIFICATIONS / SUPPORT / PLATFORM
+// ─────────────────────────────────────────────────────────
+
+model Notification {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type    String
+  title   String
+  message String
+
+  read   Boolean   @default(false)
+  readAt DateTime?
+  link   String?
+
+  platform Platform @default(WEB)
+
+  createdAt DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([userId, read])
+}
+
+model SupportTicket {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String
+  status      String  @default("OPEN")
+  priority    String  @default("NORMAL")
+  assignedTo  String?
+  resolvedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+}
+
+model PlatformAnnouncement {
+  id          String   @id @default(cuid())
+  title       String
+  message     String
+  type        String   @default("INFO")
+  targetPlans SubscriptionPlan[]
+  publishedAt DateTime?
+  expiresAt   DateTime?
+  createdBy   String
+
+  createdAt DateTime @default(now())
+}
+
+model FeatureFlag {
+  id               String   @id @default(cuid())
+  key              String   @unique
+  label            String
+  description      String?
+  defaultEnabled   Boolean  @default(false)
+  enabledForPlans  SubscriptionPlan[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orgOverrides OrganizationFeatureFlag[]
+}
+
+model OrganizationFeatureFlag {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  flagKey String
+  flag    FeatureFlag @relation(fields: [flagKey], references: [key], onDelete: Cascade)
+
+  enabled      Boolean
+  overriddenBy String?
+  overriddenAt DateTime @default(now())
+
+  @@unique([organizationId, flagKey])
+  @@index([organizationId])
+}
+
+// ─────────────────────────────────────────────────────────
+// WEBHOOKS
+// ─────────────────────────────────────────────────────────
+
+// S6 — idempotency ledger for Stripe webhooks. constructEvent() proves
+// the signature is genuine; this proves we haven't already processed it
+// (Stripe can and does redeliver the same event).
+model WebhookEvent {
+  id          String   @id @default(cuid())
+  eventId     String   @unique
+  type        String
+  processedAt DateTime @default(now())
+}
