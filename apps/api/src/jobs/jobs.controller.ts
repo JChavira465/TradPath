@@ -22,6 +22,7 @@ import { CreateJobDto } from "./dto/create-job.dto";
 import { UpdateJobDto } from "./dto/update-job.dto";
 import { UpdateJobStatusDto } from "./dto/update-job-status.dto";
 import { ListJobsQueryDto } from "./dto/list-jobs.query.dto";
+import { CalendarJobsQueryDto } from "./dto/calendar-jobs.query.dto";
 import { OnMyWayDto } from "./dto/on-my-way.dto";
 import { CompleteJobDto } from "./dto/complete-job.dto";
 
@@ -43,6 +44,16 @@ export class JobsController {
   @Get("dashboard")
   dashboard(@CurrentOrg() orgId: string) {
     return this.jobs.dashboardSummary(orgId);
+  }
+
+  @Get("calendar")
+  calendar(@CurrentOrg() orgId: string, @Query() query: CalendarJobsQueryDto) {
+    return this.jobs.calendar(orgId, query);
+  }
+
+  @Get("unscheduled")
+  unscheduled(@CurrentOrg() orgId: string) {
+    return this.jobs.unscheduled(orgId);
   }
 
   @Get(":id")

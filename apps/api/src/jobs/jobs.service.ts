@@ -7,6 +7,7 @@ import { withRetryOnCollision } from "../common/utils/sequential-number.util";
 import { CreateJobDto } from "./dto/create-job.dto";
 import { UpdateJobDto } from "./dto/update-job.dto";
 import { ListJobsQueryDto } from "./dto/list-jobs.query.dto";
+import { CalendarJobsQueryDto } from "./dto/calendar-jobs.query.dto";
 import { CompleteJobDto } from "./dto/complete-job.dto";
 
 // S2 — no COMPLETED -> SCHEDULED, etc. Terminal states have no way out.
@@ -71,6 +72,39 @@ export class JobsService {
       },
       include: { customer: true },
       orderBy: { scheduledStart: "asc" },
+    });
+  }
+
+  // Calendar view — all jobs with a scheduled slot overlapping [from, to],
+  // regardless of status (cancelled jobs still render, dimmed, on the
+  // frontend calendar rather than silently disappearing).
+  async calendar(orgId: string, query: CalendarJobsQueryDto) {
+    const from = new Date(query.from);
+    const to = new Date(query.to);
+    return this.prisma.job.findMany({
+      where: {
+        organizationId: orgId,
+        scheduledStart: { not: null, lte: to },
+        OR: [{ scheduledEnd: { gte: from } }, { scheduledEnd: null }],
+        ...(query.assignedUserId && { assignedUserIds: { has: query.assignedUserId } }),
+      },
+      include: { customer: true },
+      orderBy: { scheduledStart: "asc" },
+    });
+  }
+
+  // Unscheduled sidebar — open jobs with no scheduledStart yet, so they can
+  // be dragged onto the calendar.
+  async unscheduled(orgId: string) {
+    return this.prisma.job.findMany({
+      where: {
+        organizationId: orgId,
+        scheduledStart: null,
+        status: { notIn: ["COMPLETED", "CANCELLED"] },
+      },
+      include: { customer: true },
+      orderBy: { createdAt: "desc" },
+      take: 100,
     });
   }
 

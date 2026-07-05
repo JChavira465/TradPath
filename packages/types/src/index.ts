@@ -59,6 +59,8 @@ export interface Job {
   customerNotes: string | null;
   completionNotes: string | null;
   onMyWaySentAt: string | null;
+  bookingRequestId: string | null;
+  servicePlanId: string | null;
   customerId: string;
   customer?: JobCustomer;
   createdAt: string;
@@ -347,4 +349,38 @@ export interface MessageTemplate {
 export interface ProvisionNumberResult {
   phoneNumber: string | null;
   provisioned: boolean;
+}
+
+export interface OrgUser {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  role: UserRole;
+}
+
+export interface ScheduleEventJob {
+  id: string;
+  jobNumber: string;
+  title: string;
+  status: JobStatus;
+  type: JobType;
+  bookingRequestId: string | null;
+  servicePlanId: string | null;
+}
+
+export interface ScheduleEvent {
+  id: string;
+  jobId: string | null;
+  job?: ScheduleEventJob | null;
+  title: string;
+  description: string | null;
+  assignedUserIds: string[];
+  start: string;
+  end: string;
+  allDay: boolean;
+  color: string | null;
+  recurrenceRule: string | null;
+  createdAt: string;
+  updatedAt: string;
 }

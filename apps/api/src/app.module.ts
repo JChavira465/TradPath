@@ -24,6 +24,8 @@ import { PriceBookModule } from "./price-book/price-book.module";
 import { TwilioModule } from "./twilio/twilio.module";
 import { MessagesModule } from "./messages/messages.module";
 import { OrganizationModule } from "./organization/organization.module";
+import { UsersModule } from "./users/users.module";
+import { ScheduleModule } from "./schedule/schedule.module";
 import { HealthController } from "./health/health.controller";
 
 @Module({
@@ -80,6 +82,8 @@ import { HealthController } from "./health/health.controller";
     TwilioModule,
     MessagesModule,
     OrganizationModule,
+    UsersModule,
+    ScheduleModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
