@@ -8,6 +8,7 @@ import { ImpersonationSessionController } from "./impersonation/impersonation-se
 import { AuthModule } from "../auth/auth.module";
 import { ExecutiveDashboardModule } from "./executive-dashboard/executive-dashboard.module";
 import { CompaniesModule } from "./companies/companies.module";
+import { AdminUsersModule } from "./users/admin-users.module";
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { CompaniesModule } from "./companies/companies.module";
     }),
     ExecutiveDashboardModule,
     CompaniesModule,
+    AdminUsersModule,
   ],
   controllers: [AdminAuthController, ImpersonationController, ImpersonationSessionController],
   providers: [AdminAuthService],
