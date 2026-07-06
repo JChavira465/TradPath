@@ -15,6 +15,14 @@ function round2(n: number) {
   return Math.round(n * 100) / 100;
 }
 
+// Rounds down to the cache-TTL bucket so repeated no-range requests within
+// the same window produce an identical cache key — otherwise a bare
+// `new Date()` default is unique to the millisecond and the cache never hits.
+function roundToCacheBucket(date: Date): Date {
+  const bucketMs = CACHE_TTL_SECONDS * 1000;
+  return new Date(Math.floor(date.getTime() / bucketMs) * bucketMs);
+}
+
 @Injectable()
 export class ReportsService {
   constructor(
@@ -25,7 +33,7 @@ export class ReportsService {
   ) {}
 
   private range(query: ReportsQueryDto) {
-    const to = query.to ? new Date(query.to) : new Date();
+    const to = query.to ? new Date(query.to) : roundToCacheBucket(new Date());
     const from = query.from ? new Date(query.from) : new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
     return { from, to };
   }
@@ -99,7 +107,8 @@ export class ReportsService {
     const months: { month: string; mrr: number }[] = [];
     const now = new Date();
     for (let i = MRR_TREND_MONTHS - 1; i >= 0; i--) {
-      const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59);
+      const targetMonth = now.getMonth() - i;
+      const monthEnd = new Date(now.getFullYear(), targetMonth + 1, 0, 23, 59, 59);
       let mrr = 0;
       for (const plan of plans) {
         const started = plan.startDate <= monthEnd;
@@ -108,7 +117,13 @@ export class ReportsService {
           mrr += plan.billingCycle === "MONTHLY" ? Number(plan.price) : Number(plan.price) / 12;
         }
       }
-      months.push({ month: monthEnd.toISOString().slice(0, 7), mrr: round2(mrr) });
+      // Label built from local year/month arithmetic directly (never via
+      // monthEnd.toISOString()) — converting a local end-of-day Date to
+      // UTC can roll it into the next calendar month for any timezone
+      // behind UTC, mislabeling the most recent month as next month's.
+      const labelDate = new Date(now.getFullYear(), targetMonth, 1);
+      const month = `${labelDate.getFullYear()}-${String(labelDate.getMonth() + 1).padStart(2, "0")}`;
+      months.push({ month, mrr: round2(mrr) });
     }
     return months;
   }
