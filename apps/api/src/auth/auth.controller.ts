@@ -17,6 +17,7 @@ import { LoginDto } from "./dto/login.dto";
 import { MfaVerifyDto } from "./dto/mfa-verify.dto";
 import { ForgotPasswordDto } from "./dto/forgot-password.dto";
 import { ResetPasswordDto } from "./dto/reset-password.dto";
+import { AcceptInviteDto } from "./dto/accept-invite.dto";
 import { PushTokenDto } from "./dto/push-token.dto";
 import { MobileRefreshDto } from "./dto/mobile-refresh.dto";
 import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
@@ -71,6 +72,20 @@ export class AuthController {
       ...this.issueSession(req, reply, result.refreshToken),
       user: { id: result.user.id, email: result.user.email, firstName: result.user.firstName, role: result.user.role },
       organization: { id: result.organization.id, name: result.organization.name, slug: result.organization.slug },
+    };
+  }
+
+  @Post("accept-invite")
+  async acceptInvite(
+    @Body() dto: AcceptInviteDto,
+    @Req() req: FastifyRequest,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ) {
+    const result = await this.auth.acceptInvite(dto, requestMeta(req));
+    return {
+      accessToken: result.accessToken,
+      ...this.issueSession(req, reply, result.refreshToken),
+      user: { id: result.user.id, email: result.user.email, firstName: result.user.firstName, role: result.user.role },
     };
   }
 

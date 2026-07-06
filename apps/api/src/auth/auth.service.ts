@@ -1,9 +1,11 @@
 import { BadRequestException, Injectable, Logger, UnauthorizedException } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import * as bcrypt from "bcrypt";
 import { nanoid } from "nanoid";
 import { PrismaService } from "../prisma/prisma.service";
 import { AccountLockedException } from "../common/exceptions/account-locked.exception";
 import { sha256 } from "../common/utils/crypto.util";
+import { EmailService } from "../email/email.service";
 import { TokenService, RefreshMeta } from "./token.service";
 import { MfaService } from "./mfa.service";
 import { RegisterDto } from "./dto/register.dto";
@@ -24,6 +26,8 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly tokens: TokenService,
     private readonly mfa: MfaService,
+    private readonly email: EmailService,
+    private readonly config: ConfigService,
   ) {}
 
   async register(dto: RegisterDto, meta: RefreshMeta) {
@@ -199,12 +203,17 @@ export class AuthService {
       },
     });
 
-    // TODO(Sprint 4+): wire to SendGrid. Logged for local dev only —
-    // never log the raw token in production.
     this.logger.log({ event: "auth.password_reset.requested", userId: user.id });
     if (process.env.NODE_ENV !== "production") {
       this.logger.debug(`[dev-only] password reset token for ${email}: ${rawToken}`);
     }
+
+    const resetUrl = `${this.config.get<string>("FRONTEND_URL")}/auth/reset-password?token=${rawToken}`;
+    await this.email.send({
+      to: email,
+      subject: "Reset your TradPath password",
+      html: `<p>We received a request to reset your password. This link expires in 1 hour.</p><p><a href="${resetUrl}">Reset password</a></p><p>If you didn't request this, you can ignore this email.</p>`,
+    });
   }
 
   async resetPassword(rawToken: string, newPassword: string) {
@@ -225,6 +234,46 @@ export class AuthService {
         data: { revokedAt: new Date() },
       }),
     ]);
+  }
+
+  // Accepting a team invite creates the User and logs them straight in —
+  // structurally the same shape as register(), just sourcing the org and
+  // role from a TeamInvite instead of creating a brand-new organization.
+  async acceptInvite(dto: { token: string; firstName: string; lastName: string; password: string }, meta: RefreshMeta) {
+    const tokenHash = sha256(dto.token);
+    const invite = await this.prisma.teamInvite.findUnique({ where: { tokenHash } });
+
+    if (!invite || invite.usedAt || invite.expiresAt < new Date()) {
+      throw new BadRequestException("Invalid or expired invite");
+    }
+
+    const existingUser = await this.prisma.user.findUnique({ where: { email: invite.email } });
+    if (existingUser) {
+      throw new BadRequestException("A user with that email already exists");
+    }
+
+    const passwordHash = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
+
+    const user = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.user.create({
+        data: {
+          email: invite.email,
+          passwordHash,
+          firstName: dto.firstName,
+          lastName: dto.lastName,
+          role: invite.role,
+          organizationId: invite.organizationId,
+          emailVerified: true,
+        },
+      });
+      await tx.teamInvite.update({ where: { id: invite.id }, data: { usedAt: new Date() } });
+      return created;
+    });
+
+    const accessToken = this.tokens.signAccessToken(user.id);
+    const refresh = await this.tokens.issueNewFamily(user.id, invite.organizationId, meta);
+
+    return { accessToken, refreshToken: refresh.rawToken, user };
   }
 
   async getProfile(userId: string) {

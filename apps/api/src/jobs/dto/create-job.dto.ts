@@ -5,6 +5,7 @@ import {
   IsDateString,
   IsEnum,
   IsInt,
+  IsNumber,
   IsOptional,
   IsString,
   Max,
@@ -15,6 +16,10 @@ import {
 export class CreateJobDto {
   @IsString()
   customerId!: string;
+
+  @IsOptional()
+  @IsString()
+  serviceOfferingId?: string;
 
   @IsString()
   @MaxLength(200)
@@ -82,4 +87,14 @@ export class CreateJobDto {
   @IsString()
   @MaxLength(5000)
   customerNotes?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  laborCost?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  materialCost?: number;
 }

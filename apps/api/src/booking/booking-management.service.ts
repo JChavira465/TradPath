@@ -70,6 +70,7 @@ export class BookingManagementService {
             organizationId: orgId,
             customerId: customer!.id,
             bookingRequestId: request.id,
+            serviceOfferingId: offering?.id,
             jobNumber,
             title: offering?.name ?? "Booking request",
             serviceAddress: request.serviceAddress,
