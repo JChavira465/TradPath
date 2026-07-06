@@ -26,6 +26,13 @@ import { MessagesModule } from "./messages/messages.module";
 import { OrganizationModule } from "./organization/organization.module";
 import { UsersModule } from "./users/users.module";
 import { ScheduleModule } from "./schedule/schedule.module";
+import { TimeEntriesModule } from "./time-entries/time-entries.module";
+import { OpenAiModule } from "./openai/openai.module";
+import { AiModule } from "./ai/ai.module";
+import { DashboardModule } from "./dashboard/dashboard.module";
+import { ReportsModule } from "./reports/reports.module";
+import { TeamModule } from "./team/team.module";
+import { OnboardingModule } from "./onboarding/onboarding.module";
 import { HealthController } from "./health/health.controller";
 
 @Module({
@@ -84,6 +91,13 @@ import { HealthController } from "./health/health.controller";
     OrganizationModule,
     UsersModule,
     ScheduleModule,
+    TimeEntriesModule,
+    OpenAiModule,
+    AiModule,
+    DashboardModule,
+    ReportsModule,
+    TeamModule,
+    OnboardingModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

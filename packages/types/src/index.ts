@@ -165,6 +165,8 @@ export interface Invoice {
   amountDue: string;
   notes: string | null;
   termsAndConditions: string | null;
+  includePhotos: boolean;
+  photoUrls: string[];
   sentAt: string | null;
   paidAt: string | null;
   payments?: Payment[];
@@ -351,6 +353,56 @@ export interface ProvisionNumberResult {
   provisioned: boolean;
 }
 
+export type TimeEntryStatus = "ACTIVE" | "COMPLETED" | "APPROVED" | "REJECTED";
+
+export interface TimeEntryUser {
+  id: string;
+  firstName: string;
+  lastName: string;
+}
+
+export interface TimeEntryJob {
+  id: string;
+  jobNumber: string;
+  title: string;
+}
+
+export interface TimeEntry {
+  id: string;
+  userId: string;
+  user?: TimeEntryUser;
+  jobId: string | null;
+  job?: TimeEntryJob | null;
+  clockIn: string;
+  clockOut: string | null;
+  clockInLat: number | null;
+  clockInLng: number | null;
+  clockOutLat: number | null;
+  clockOutLng: number | null;
+  breakMinutes: number;
+  breakStartedAt: string | null;
+  totalHours: string | null;
+  overtimeHours: string;
+  regularHours: string;
+  status: TimeEntryStatus;
+  notes: string | null;
+  approvedBy: string | null;
+  approvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TimesheetSummary {
+  userId: string;
+  name: string;
+  totalHours: number;
+  regularHours: number;
+  dailyOvertimeHours: number;
+  weeklyOvertimeHours: number;
+  overtimeHours: number;
+  entryCount: number;
+}
+
 export interface OrgUser {
   id: string;
   firstName: string;
@@ -369,6 +421,28 @@ export interface ScheduleEventJob {
   servicePlanId: string | null;
 }
 
+export interface AiInvoiceDraftLineItem {
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  priceBookId: string | null;
+  confidence: number;
+}
+
+export interface AiInvoiceDraft {
+  configured: boolean;
+  lineItems: AiInvoiceDraftLineItem[];
+  unmatchedItems: string[];
+  laborHours: number;
+  jobNotes: string;
+}
+
+export interface TranscribeResult {
+  voiceMemoPath: string;
+  transcript: string | null;
+  transcribed: boolean;
+}
+
 export interface ScheduleEvent {
   id: string;
   jobId: string | null;
@@ -383,4 +457,140 @@ export interface ScheduleEvent {
   recurrenceRule: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface DashboardActivityItem {
+  type: "payment" | "invoice_sent" | "job_completed" | "booking_request";
+  description: string;
+  timestamp: string;
+}
+
+export interface DashboardServicePlanRenewal {
+  id: string;
+  name: string;
+  nextBillingDate: string | null;
+  price: string;
+  customer?: JobCustomer;
+}
+
+export interface DashboardSummary {
+  todayJobs: Job[];
+  weekJobs: Job[];
+  pendingBookingsCount: number;
+  arSummary: ArSummary;
+  clockedInCount: number;
+  revenueMoM: { thisMonth: number; lastMonth: number; changePercent: number | null };
+  planMrr: { mrr: number; arr: number; activeCount: number };
+  renewalsDueSoon: DashboardServicePlanRenewal[];
+  unreadMessagesCount: number;
+  activity: DashboardActivityItem[];
+}
+
+export interface ReportsProfitPerJob {
+  jobId: string;
+  jobNumber: string;
+  title: string;
+  revenue: number;
+  laborCost: number;
+  materialCost: number;
+  profit: number;
+  marginPercent: number | null;
+  healthy: boolean;
+}
+
+export interface ReportsTopCustomer {
+  customerId: string;
+  name: string;
+  totalBilled: number;
+  invoiceCount: number;
+}
+
+export interface ReportsEmployeeHours {
+  userId: string;
+  name: string;
+  totalHours: number;
+  overtimeHours: number;
+}
+
+export interface ReportsSummary {
+  range: { from: string; to: string };
+  revenue: { oneTime: number; recurring: number; total: number };
+  mrrTrend: { month: string; mrr: number }[];
+  profitPerJob: ReportsProfitPerJob[];
+  completionRate: number;
+  avgJobValue: number;
+  topCustomers: ReportsTopCustomer[];
+  employeeHours: ReportsEmployeeHours[];
+  arAging: ArSummary;
+  planGrowthChurn: {
+    mrr: number;
+    arr: number;
+    activeCount: number;
+    byStatus: Record<string, number>;
+    churnedLast30Days: number;
+    newPlansInRange: number;
+  };
+  bookingConversion: { total: number; confirmed: number; conversionRate: number };
+  aiUsage: { plan: string; creditsUsed: number; creditsLimit: number | null; resetAt: string | null };
+}
+
+export interface OrganizationProfile {
+  id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+  logo: string | null;
+  timezone: string;
+  currency: string;
+  subscriptionPlan: string;
+  subscriptionStatus: string;
+  trialEndsAt: string | null;
+  defaultTaxRate: string;
+  defaultInvoiceTerms: string | null;
+  defaultInvoiceDueDays: number;
+}
+
+export interface TeamMember {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  role: UserRole;
+  isSuspended: boolean;
+  lastLoginAt: string | null;
+  mfaEnabled: boolean;
+  createdAt: string;
+}
+
+export interface PendingTeamInvite {
+  id: string;
+  email: string;
+  role: UserRole;
+  expiresAt: string;
+  createdAt: string;
+}
+
+export interface TeamListResult {
+  members: TeamMember[];
+  pendingInvites: PendingTeamInvite[];
+}
+
+export interface OnboardingChecklistItem {
+  key: string;
+  label: string;
+  done: boolean;
+  actionHref: string;
+}
+
+export interface OnboardingChecklist {
+  items: OnboardingChecklistItem[];
+  completedCount: number;
+  totalCount: number;
+  allDone: boolean;
+  dismissed: boolean;
 }
