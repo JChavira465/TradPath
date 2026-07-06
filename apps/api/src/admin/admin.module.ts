@@ -12,6 +12,7 @@ import { AdminUsersModule } from "./users/admin-users.module";
 import { BillingModule } from "./billing/billing.module";
 import { FeatureFlagsModule } from "./feature-flags/feature-flags.module";
 import { AuditLogsModule } from "./audit-logs/audit-logs.module";
+import { SystemHealthModule } from "./system-health/system-health.module";
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { AuditLogsModule } from "./audit-logs/audit-logs.module";
     BillingModule,
     FeatureFlagsModule,
     AuditLogsModule,
+    SystemHealthModule,
   ],
   controllers: [AdminAuthController, ImpersonationController, ImpersonationSessionController],
   providers: [AdminAuthService],
