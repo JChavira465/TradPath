@@ -11,6 +11,7 @@ import { CompaniesModule } from "./companies/companies.module";
 import { AdminUsersModule } from "./users/admin-users.module";
 import { BillingModule } from "./billing/billing.module";
 import { FeatureFlagsModule } from "./feature-flags/feature-flags.module";
+import { AuditLogsModule } from "./audit-logs/audit-logs.module";
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { FeatureFlagsModule } from "./feature-flags/feature-flags.module";
     AdminUsersModule,
     BillingModule,
     FeatureFlagsModule,
+    AuditLogsModule,
   ],
   controllers: [AdminAuthController, ImpersonationController, ImpersonationSessionController],
   providers: [AdminAuthService],
