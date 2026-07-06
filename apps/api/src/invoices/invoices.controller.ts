@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Header, HttpCode, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
 import { CurrentOrg } from "../common/decorators/current-org.decorator";
 import { CurrentUser } from "../common/decorators/current-user.decorator";
@@ -21,6 +21,13 @@ export class InvoicesController {
   @Get("ar-summary")
   arSummary(@CurrentOrg() orgId: string) {
     return this.invoices.arSummary(orgId);
+  }
+
+  @Get("export/accounting-csv")
+  @Header("Content-Type", "text/csv")
+  @Header("Content-Disposition", 'attachment; filename="invoices.csv"')
+  exportAccountingCsv(@CurrentOrg() orgId: string, @Query("from") from?: string, @Query("to") to?: string) {
+    return this.invoices.exportAccountingCsv(orgId, from, to);
   }
 
   @Post()

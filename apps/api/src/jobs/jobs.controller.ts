@@ -92,6 +92,11 @@ export class JobsController {
     return this.jobs.listPhotos(orgId, id);
   }
 
+  @Get(":id/checkpoints")
+  checkpointStatus(@CurrentOrg() orgId: string, @Param("id") id: string) {
+    return this.jobs.checkpointStatus(orgId, id);
+  }
+
   @Post(":id/photos")
   async uploadPhoto(
     @CurrentOrg() orgId: string,
@@ -108,13 +113,36 @@ export class JobsController {
     const caption = (file.fields?.caption as any)?.value;
     const latitude = (file.fields?.latitude as any)?.value;
     const longitude = (file.fields?.longitude as any)?.value;
+    const checkpointId = (file.fields?.checkpointId as any)?.value;
 
     return this.jobs.addPhoto(orgId, id, user.userId, buffer, {
       type,
       caption,
       latitude: latitude !== undefined ? Number(latitude) : undefined,
       longitude: longitude !== undefined ? Number(longitude) : undefined,
+      checkpointId,
     });
+  }
+
+  @Get(":id/photos/:photoId/url")
+  getPhotoUrl(@CurrentOrg() orgId: string, @Param("id") id: string, @Param("photoId") photoId: string) {
+    return this.jobs.getPhotoUrl(orgId, id, photoId);
+  }
+
+  @Post(":id/signature")
+  async uploadSignature(
+    @CurrentOrg() orgId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") id: string,
+    @Req() req: FastifyRequest,
+  ) {
+    const file = await req.file();
+    if (!file) {
+      throw new BadRequestException("No file provided");
+    }
+    const buffer = await file.toBuffer();
+    const role = ((file.fields?.role as any)?.value ?? "CUSTOMER") as "CUSTOMER" | "TECHNICIAN";
+    return this.jobs.addSignature(orgId, id, user.userId, buffer, role);
   }
 
   @Post(":id/complete")

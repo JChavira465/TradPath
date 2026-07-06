@@ -16,6 +16,11 @@ export class MessagesController {
     return this.messages.list(orgId, customerId, jobId);
   }
 
+  @Get("unread-count")
+  unreadCount(@CurrentOrg() orgId: string) {
+    return this.messages.unreadCount(orgId);
+  }
+
   @Post()
   send(@CurrentOrg() orgId: string, @Body() dto: SendMessageDto) {
     return this.messages.send(orgId, dto);

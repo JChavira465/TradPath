@@ -1,25 +1,37 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { LineItem } from "@tradpath/types";
 import { useCustomers } from "@/hooks/use-customers";
 import { useCreateInvoice } from "@/hooks/use-invoices";
+import { useJobPhotos } from "@/hooks/use-jobs";
 import { LineItemsEditor, computeLocalTotals } from "@/components/invoicing/line-items-editor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 export default function NewInvoicePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const jobId = searchParams.get("jobId") ?? undefined;
   const { data: customers } = useCustomers();
   const createInvoice = useCreateInvoice();
+  const { data: jobPhotos } = useJobPhotos(jobId ?? "");
 
   const [customerId, setCustomerId] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [taxRate, setTaxRate] = useState(0);
   const [discountAmount, setDiscountAmount] = useState(0);
+  const [includePhotos, setIncludePhotos] = useState(false);
   const [lineItems, setLineItems] = useState<LineItem[]>([{ description: "", quantity: 1, unitPrice: 0, taxable: true }]);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const paramCustomerId = searchParams.get("customerId");
+    if (paramCustomerId) setCustomerId(paramCustomerId);
+  }, [searchParams]);
+
+  const visiblePhotoCount = jobPhotos?.filter((p) => p.isCustomerVisible && (p.type === "BEFORE" || p.type === "AFTER")).length ?? 0;
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,12 +40,14 @@ export default function NewInvoicePage() {
     try {
       const invoice = await createInvoice.mutateAsync({
         customerId,
+        jobId,
         dueDate: dueDate ? new Date(dueDate).toISOString() : undefined,
         lineItems,
         taxRate,
         discountAmount,
         subtotal: totals.subtotal,
         total: totals.total,
+        includePhotos: jobId ? includePhotos : undefined,
       });
       router.push(`/dashboard/invoices/${invoice.id}`);
     } catch (err: any) {
@@ -85,6 +99,14 @@ export default function NewInvoicePage() {
         </div>
 
         <LineItemsEditor lineItems={lineItems} onChange={setLineItems} taxRate={taxRate} discountAmount={discountAmount} />
+
+        {jobId && (
+          <label className="flex items-center gap-2 rounded-md border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
+            <input type="checkbox" checked={includePhotos} onChange={(e) => setIncludePhotos(e.target.checked)} />
+            Include before/after photos from this job on the invoice
+            {visiblePhotoCount > 0 && ` (${visiblePhotoCount} available)`}
+          </label>
+        )}
 
         {error && <p className="text-sm text-red-600">{error}</p>}
 

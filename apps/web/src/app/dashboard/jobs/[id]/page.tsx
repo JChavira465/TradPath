@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { JobStatus } from "@tradpath/types";
 import { useJob, useOnMyWay, useUpdateJobStatus } from "@/hooks/use-jobs";
 import { useCustomerEquipment } from "@/hooks/use-customers";
+import { apiClient } from "@/lib/api-client";
 import { JobStatusBadge } from "@/components/jobs/job-status-badge";
 import { Button } from "@/components/ui/button";
 
@@ -36,6 +37,11 @@ export default function JobDetailPage() {
     );
   };
 
+  const downloadWorkOrder = async () => {
+    const res = await apiClient.get<{ url: string }>(`/jobs/${job.id}/work-order-pdf`);
+    window.open(res.data.url, "_blank");
+  };
+
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <div className="flex items-start justify-between">
@@ -54,6 +60,11 @@ export default function JobDetailPage() {
             <Link href={`/dashboard/jobs/${job.id}/complete`}>
               <Button>Complete Job</Button>
             </Link>
+          )}
+          {job.status === "COMPLETED" && (
+            <Button variant="outline" onClick={downloadWorkOrder}>
+              Download Work Order
+            </Button>
           )}
         </div>
       </div>
@@ -78,6 +89,9 @@ export default function JobDetailPage() {
                   Cancel Job
                 </Button>
               )}
+              <Link href={`/dashboard/invoices/new?jobId=${job.id}&customerId=${job.customerId}`}>
+                <Button variant="outline">Create Invoice</Button>
+              </Link>
             </div>
             {job.onMyWaySentAt && (
               <p className="mt-3 text-xs text-gray-400">

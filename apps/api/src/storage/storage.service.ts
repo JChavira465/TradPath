@@ -92,6 +92,20 @@ export class StorageService {
     return { path, publicUrl: data.publicUrl };
   }
 
+  // Signature captures contain customer PII (a legal signature tied to a
+  // job/address) — private bucket, signed URL only, never a public link.
+  async uploadSignature(orgId: string, buffer: Buffer): Promise<UploadResult> {
+    const detected = await this.assertValidFile(buffer, "photo");
+    const path = this.buildPath(orgId, "signatures", detected.ext);
+
+    const { error } = await this.client.storage
+      .from(this.privateBucket)
+      .upload(path, buffer, { contentType: detected.mime, upsert: false });
+    if (error) throw new BadRequestException(`Upload failed: ${error.message}`);
+
+    return { path };
+  }
+
   async uploadVoiceMemo(orgId: string, buffer: Buffer): Promise<UploadResult> {
     const detected = await this.assertValidFile(buffer, "voiceMemo");
     const path = this.buildPath(orgId, "voice-memos", detected.ext);
@@ -124,6 +138,15 @@ export class StorageService {
       .createSignedUrl(path, expiresInSeconds);
     if (error || !data) throw new BadRequestException(`Could not sign URL: ${error?.message}`);
     return data.signedUrl;
+  }
+
+  // Raw bytes for a private-bucket file — used when the content needs to be
+  // embedded elsewhere (e.g. a signature stitched into a generated PDF)
+  // rather than linked to via a signed URL.
+  async downloadPrivate(path: string): Promise<Buffer> {
+    const { data, error } = await this.client.storage.from(this.privateBucket).download(path);
+    if (error || !data) throw new BadRequestException(`Could not download file: ${error?.message}`);
+    return Buffer.from(await data.arrayBuffer());
   }
 
   async deleteFile(path: string, bucket: "public" | "private" = "private"): Promise<void> {

@@ -13,7 +13,7 @@ export class MessagesService {
   ) {}
 
   async list(orgId: string, customerId?: string, jobId?: string) {
-    return this.prisma.jobTextMessage.findMany({
+    const messages = await this.prisma.jobTextMessage.findMany({
       where: {
         organizationId: orgId,
         ...(customerId && { customerId }),
@@ -21,6 +21,23 @@ export class MessagesService {
       },
       orderBy: { createdAt: "asc" },
       take: 200,
+    });
+
+    // Opening a specific thread marks its inbound messages read — matches
+    // the standard inbox UX (viewing a conversation clears its unread badge).
+    if (customerId) {
+      await this.prisma.jobTextMessage.updateMany({
+        where: { organizationId: orgId, customerId, direction: "INBOUND", readAt: null },
+        data: { readAt: new Date() },
+      });
+    }
+
+    return messages;
+  }
+
+  async unreadCount(orgId: string) {
+    return this.prisma.jobTextMessage.count({
+      where: { organizationId: orgId, direction: "INBOUND", readAt: null },
     });
   }
 

@@ -1,14 +1,16 @@
-import { BadRequestException, Injectable, NotFoundException, NotImplementedException } from "@nestjs/common";
+import { BadRequestException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { JobStatus, Prisma } from "@tradpath/database";
 import { PrismaService } from "../prisma/prisma.service";
 import { StorageService } from "../storage/storage.service";
 import { TwilioService } from "../twilio/twilio.service";
+import { EmailService } from "../email/email.service";
 import { withRetryOnCollision } from "../common/utils/sequential-number.util";
 import { CreateJobDto } from "./dto/create-job.dto";
 import { UpdateJobDto } from "./dto/update-job.dto";
 import { ListJobsQueryDto } from "./dto/list-jobs.query.dto";
 import { CalendarJobsQueryDto } from "./dto/calendar-jobs.query.dto";
 import { CompleteJobDto } from "./dto/complete-job.dto";
+import { WorkOrderPdfService } from "./work-order-pdf.service";
 
 // S2 — no COMPLETED -> SCHEDULED, etc. Terminal states have no way out.
 const ALLOWED_TRANSITIONS: Record<JobStatus, JobStatus[]> = {
@@ -21,10 +23,14 @@ const ALLOWED_TRANSITIONS: Record<JobStatus, JobStatus[]> = {
 
 @Injectable()
 export class JobsService {
+  private readonly logger = new Logger(JobsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
     private readonly twilio: TwilioService,
+    private readonly email: EmailService,
+    private readonly workOrderPdf: WorkOrderPdfService,
   ) {}
 
   // S1 — every query filtered by organizationId, sourced only from the JWT.
@@ -171,6 +177,16 @@ export class JobsService {
     return String(last ? (parseInt(last.jobNumber, 10) || 1000) + 1 : 1001);
   }
 
+  private async assertServiceOfferingBelongsToOrg(orgId: string, serviceOfferingId?: string) {
+    if (!serviceOfferingId) return;
+    const offering = await this.prisma.serviceOffering.findFirst({
+      where: { id: serviceOfferingId, organizationId: orgId },
+    });
+    if (!offering) {
+      throw new BadRequestException("Service offering not found in this organization");
+    }
+  }
+
   async create(orgId: string, userId: string, dto: CreateJobDto) {
     const customer = await this.prisma.customer.findFirst({
       where: { id: dto.customerId, organizationId: orgId },
@@ -179,6 +195,7 @@ export class JobsService {
       throw new BadRequestException("Customer not found in this organization");
     }
     await this.assertAssigneesBelongToOrg(orgId, dto.assignedUserIds);
+    await this.assertServiceOfferingBelongsToOrg(orgId, dto.serviceOfferingId);
 
     try {
       return await withRetryOnCollision(async () => {
@@ -187,6 +204,7 @@ export class JobsService {
           data: {
             organizationId: orgId,
             customerId: dto.customerId,
+            serviceOfferingId: dto.serviceOfferingId,
             jobNumber,
             title: dto.title,
             description: dto.description,
@@ -202,6 +220,9 @@ export class JobsService {
             assignedUserIds: dto.assignedUserIds ?? [],
             internalNotes: dto.internalNotes,
             customerNotes: dto.customerNotes,
+            laborCost: dto.laborCost ?? 0,
+            materialCost: dto.materialCost ?? 0,
+            profit: -((dto.laborCost ?? 0) + (dto.materialCost ?? 0)),
             createdBy: userId,
           },
         });
@@ -215,8 +236,13 @@ export class JobsService {
   }
 
   async update(orgId: string, id: string, dto: UpdateJobDto) {
-    await this.findOne(orgId, id);
+    const existing = await this.findOne(orgId, id);
     await this.assertAssigneesBelongToOrg(orgId, dto.assignedUserIds);
+    await this.assertServiceOfferingBelongsToOrg(orgId, dto.serviceOfferingId);
+
+    const laborCost = dto.laborCost ?? Number(existing.laborCost);
+    const materialCost = dto.materialCost ?? Number(existing.materialCost);
+    const recomputeProfit = dto.laborCost !== undefined || dto.materialCost !== undefined;
 
     return this.prisma.job.update({
       where: { id },
@@ -224,6 +250,7 @@ export class JobsService {
         ...dto,
         scheduledStart: dto.scheduledStart ? new Date(dto.scheduledStart) : undefined,
         scheduledEnd: dto.scheduledEnd ? new Date(dto.scheduledEnd) : undefined,
+        profit: recomputeProfit ? Number(existing.totalRevenue) - laborCost - materialCost : undefined,
       },
     });
   }
@@ -298,9 +325,18 @@ export class JobsService {
     jobId: string,
     uploadedBy: string,
     buffer: Buffer,
-    meta: { type: string; caption?: string; latitude?: number; longitude?: number },
+    meta: { type: string; caption?: string; latitude?: number; longitude?: number; checkpointId?: string },
   ) {
-    await this.findOne(orgId, jobId);
+    const job = await this.findOne(orgId, jobId);
+
+    if (meta.checkpointId) {
+      const checkpoint = await this.prisma.jobPhotoCheckpoint.findFirst({
+        where: { id: meta.checkpointId, organizationId: orgId, serviceOfferingId: job.serviceOfferingId ?? undefined },
+      });
+      if (!checkpoint) {
+        throw new BadRequestException("Photo checkpoint not found for this job's service offering");
+      }
+    }
 
     const upload = await this.storage.uploadPhoto(orgId, buffer);
 
@@ -310,6 +346,7 @@ export class JobsService {
         uploadedBy,
         url: upload.publicUrl!,
         type: meta.type as any,
+        checkpointId: meta.checkpointId,
         caption: meta.caption,
         latitude: meta.latitude,
         longitude: meta.longitude,
@@ -323,6 +360,67 @@ export class JobsService {
     return this.prisma.jobPhoto.findMany({ where: { jobId }, orderBy: { createdAt: "asc" } });
   }
 
+  // Signatures live in the private bucket (see StorageService.uploadSignature)
+  // — the JobPhoto.url column holds a storage PATH for these, not a public
+  // URL, so callers must always resolve it via getPhotoUrl before display.
+  async addSignature(orgId: string, jobId: string, uploadedBy: string, buffer: Buffer, role: "CUSTOMER" | "TECHNICIAN") {
+    await this.findOne(orgId, jobId);
+    const upload = await this.storage.uploadSignature(orgId, buffer);
+
+    return this.prisma.jobPhoto.create({
+      data: {
+        jobId,
+        uploadedBy,
+        url: upload.path,
+        type: "SIGNATURE",
+        caption: role,
+        isCustomerVisible: false,
+        takenAt: new Date(),
+      },
+    });
+  }
+
+  async getPhotoUrl(orgId: string, jobId: string, photoId: string) {
+    await this.findOne(orgId, jobId);
+    const photo = await this.prisma.jobPhoto.findFirst({ where: { id: photoId, jobId } });
+    if (!photo) {
+      throw new NotFoundException("Photo not found");
+    }
+    if (photo.type === "SIGNATURE") {
+      return { url: await this.storage.getSignedUrl(photo.url) };
+    }
+    return { url: photo.url };
+  }
+
+  // Server-enforced (not just UI): every REQUIRED checkpoint for the job's
+  // service offering must have at least one photo attached before the job
+  // can move to COMPLETED. A job with no serviceOfferingId has no defined
+  // checkpoints, so nothing is required — this only ever tightens, never
+  // silently blocks jobs the org never configured checkpoints for.
+  async checkpointStatus(orgId: string, jobId: string) {
+    const job = await this.findOne(orgId, jobId);
+    if (!job.serviceOfferingId) {
+      return [];
+    }
+
+    const [checkpoints, photos] = await Promise.all([
+      this.prisma.jobPhotoCheckpoint.findMany({
+        where: { organizationId: orgId, serviceOfferingId: job.serviceOfferingId },
+        orderBy: { sortOrder: "asc" },
+      }),
+      this.prisma.jobPhoto.findMany({ where: { jobId }, select: { checkpointId: true } }),
+    ]);
+
+    const fulfilledCheckpointIds = new Set(photos.map((p) => p.checkpointId).filter(Boolean));
+    return checkpoints.map((cp) => ({
+      id: cp.id,
+      label: cp.label,
+      phase: cp.phase,
+      required: cp.required,
+      fulfilled: fulfilledCheckpointIds.has(cp.id),
+    }));
+  }
+
   async complete(orgId: string, id: string, dto: CompleteJobDto) {
     const job = await this.findOne(orgId, id);
 
@@ -330,7 +428,15 @@ export class JobsService {
       throw new BadRequestException(`Cannot complete a job in ${job.status} status`);
     }
 
-    return this.prisma.job.update({
+    const checkpoints = await this.checkpointStatus(orgId, id);
+    const missingRequired = checkpoints.filter((cp) => cp.required && !cp.fulfilled);
+    if (missingRequired.length > 0) {
+      throw new BadRequestException(
+        `Missing required photo(s): ${missingRequired.map((cp) => cp.label).join(", ")}`,
+      );
+    }
+
+    const completed = await this.prisma.job.update({
       where: { id },
       data: {
         status: "COMPLETED",
@@ -339,12 +445,41 @@ export class JobsService {
         completionFlowCompletedAt: new Date(),
       },
     });
+
+    // Best-effort: a PDF/email failure must never roll back or block the
+    // completion itself — the tech's work is already done. Failures are
+    // logged; getWorkOrderPdfUrl() falls back to generating on demand.
+    this.generateAndSendWorkOrder(orgId, id).catch((err) =>
+      this.logger.warn({ event: "work_order.generate_failed", jobId: id, message: err.message }),
+    );
+
+    return completed;
   }
 
-  async getWorkOrderPdfUrl(orgId: string, id: string): Promise<never> {
-    await this.findOne(orgId, id);
-    // Real PDF generation (photos, signatures, GPS/timestamp, totals) is
-    // Sprint 7 scope. The route exists now so the API surface is stable.
-    throw new NotImplementedException("Work order PDF generation is not available until Sprint 7");
+  private async generateAndSendWorkOrder(orgId: string, jobId: string) {
+    const buffer = await this.workOrderPdf.generate({ orgId, jobId });
+    const upload = await this.storage.uploadPDF(orgId, buffer, "work-orders");
+    await this.prisma.job.update({ where: { id: jobId }, data: { workOrderPdfPath: upload.path } });
+
+    const job = await this.prisma.job.findUnique({ where: { id: jobId }, include: { customer: true } });
+    if (job?.customer.email) {
+      const signedUrl = await this.storage.getSignedUrl(upload.path, 7 * 24 * 60 * 60);
+      await this.email.send({
+        to: job.customer.email,
+        subject: `Work order for job #${job.jobNumber}`,
+        html: `<p>Hi ${job.customer.firstName},</p><p>Here's the completion report for your recent service. This link is valid for 7 days.</p><p><a href="${signedUrl}">View work order</a></p>`,
+      });
+    }
+  }
+
+  async getWorkOrderPdfUrl(orgId: string, id: string) {
+    const job = await this.findOne(orgId, id);
+    if (job.workOrderPdfPath) {
+      return { url: await this.storage.getSignedUrl(job.workOrderPdfPath) };
+    }
+    const buffer = await this.workOrderPdf.generate({ orgId, jobId: id });
+    const upload = await this.storage.uploadPDF(orgId, buffer, "work-orders");
+    await this.prisma.job.update({ where: { id }, data: { workOrderPdfPath: upload.path } });
+    return { url: await this.storage.getSignedUrl(upload.path) };
   }
 }

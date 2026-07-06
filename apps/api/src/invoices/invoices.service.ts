@@ -77,6 +77,36 @@ export class InvoicesService {
     );
   }
 
+  // Only BEFORE/AFTER photos the org has marked customer-visible ever get
+  // embedded on a customer-facing invoice — internal-only shots never leak
+  // through this toggle.
+  private async resolvePhotoUrls(jobId?: string, includePhotos?: boolean): Promise<string[]> {
+    if (!includePhotos || !jobId) return [];
+    const photos = await this.prisma.jobPhoto.findMany({
+      where: { jobId, isCustomerVisible: true, type: { in: ["BEFORE", "AFTER"] } },
+      orderBy: { createdAt: "asc" },
+      select: { url: true },
+    });
+    return photos.map((p) => p.url);
+  }
+
+  // Job.totalRevenue/profit are kept in sync with that job's non-void
+  // invoices here (the only place invoice totals change) — laborCost and
+  // materialCost are left alone since those come from manual entry on the
+  // job itself (no cost-basis data exists elsewhere to derive them from).
+  private async syncJobFinancials(jobId: string) {
+    const [job, invoices] = await Promise.all([
+      this.prisma.job.findUnique({ where: { id: jobId }, select: { laborCost: true, materialCost: true } }),
+      this.prisma.invoice.findMany({ where: { jobId, status: { not: "VOID" } }, select: { total: true } }),
+    ]);
+    if (!job) return;
+
+    const totalRevenue = invoices.reduce((sum, inv) => sum + Number(inv.total), 0);
+    const profit = totalRevenue - Number(job.laborCost) - Number(job.materialCost);
+
+    await this.prisma.job.update({ where: { id: jobId }, data: { totalRevenue, profit } });
+  }
+
   async create(orgId: string, userId: string, dto: CreateInvoiceDto) {
     const customer = await this.prisma.customer.findFirst({ where: { id: dto.customerId, organizationId: orgId } });
     if (!customer) {
@@ -93,8 +123,10 @@ export class InvoicesService {
         ? new Date(dto.dueDate)
         : new Date(Date.now() + (org?.defaultInvoiceDueDays ?? 30) * 24 * 60 * 60 * 1000);
 
+    const photoUrls = await this.resolvePhotoUrls(dto.jobId, dto.includePhotos);
+
     try {
-      return await withRetryOnCollision(async () => {
+      const invoice = await withRetryOnCollision(async () => {
         const invoiceNumber = await this.nextInvoiceNumber(orgId);
         return this.prisma.invoice.create({
           data: {
@@ -115,10 +147,15 @@ export class InvoicesService {
             notes: dto.notes,
             termsAndConditions: dto.termsAndConditions,
             includePhotos: dto.includePhotos ?? false,
+            photoUrls: photoUrls as any,
             createdBy: userId,
           },
         });
       });
+      if (dto.jobId) {
+        await this.syncJobFinancials(dto.jobId);
+      }
+      return invoice;
     } catch (err: any) {
       if (err?.code === "P2002") {
         throw new BadRequestException("Could not allocate an invoice number, please retry");
@@ -139,7 +176,13 @@ export class InvoicesService {
     const totals = computeAndVerifyTotals(lineItems, taxRate, discountAmount, dto.subtotal, dto.total);
     const amountDue = Math.max(0, totals.total - Number(invoice.amountPaid));
 
-    return this.prisma.invoice.update({
+    const includePhotos = dto.includePhotos ?? invoice.includePhotos;
+    const photoUrls =
+      dto.includePhotos !== undefined
+        ? await this.resolvePhotoUrls(invoice.jobId ?? undefined, includePhotos)
+        : undefined;
+
+    const updated = await this.prisma.invoice.update({
       where: { id },
       data: {
         dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
@@ -153,8 +196,13 @@ export class InvoicesService {
         notes: dto.notes,
         termsAndConditions: dto.termsAndConditions,
         includePhotos: dto.includePhotos,
+        photoUrls: photoUrls as any,
       },
     });
+    if (invoice.jobId) {
+      await this.syncJobFinancials(invoice.jobId);
+    }
+    return updated;
   }
 
   async remove(orgId: string, id: string) {
@@ -163,6 +211,9 @@ export class InvoicesService {
       throw new BadRequestException("Cannot delete an invoice that has payments recorded");
     }
     await this.prisma.invoice.delete({ where: { id } });
+    if (invoice.jobId) {
+      await this.syncJobFinancials(invoice.jobId);
+    }
     return { success: true };
   }
 
@@ -311,5 +362,68 @@ export class InvoicesService {
     }
 
     return { totalOutstanding, invoiceCount: outstanding.length, buckets };
+  }
+
+  // Generic accounting-import CSV (one row per line item) — the column
+  // set is intentionally plain/standard rather than QuickBooks- or
+  // Xero-specific, since both products' bulk-import tools let the user
+  // map arbitrary CSV columns to their own fields on import.
+  async exportAccountingCsv(orgId: string, from?: string, to?: string) {
+    const invoices = await this.prisma.invoice.findMany({
+      where: {
+        organizationId: orgId,
+        status: { not: "VOID" },
+        ...((from || to) && {
+          createdAt: {
+            ...(from && { gte: new Date(from) }),
+            ...(to && { lte: new Date(to) }),
+          },
+        }),
+      },
+      include: { customer: true },
+      orderBy: { createdAt: "asc" },
+    });
+
+    const escape = (value: string) => `"${value.replace(/"/g, '""')}"`;
+    const header = [
+      "InvoiceNumber",
+      "InvoiceDate",
+      "DueDate",
+      "CustomerName",
+      "CustomerEmail",
+      "Description",
+      "Quantity",
+      "UnitPrice",
+      "Amount",
+      "TaxAmount",
+      "Total",
+      "Status",
+    ];
+    const rows: string[] = [header.join(",")];
+
+    for (const invoice of invoices) {
+      const lineItems = invoice.lineItems as any as { description: string; quantity: number; unitPrice: number }[];
+      const customerName = invoice.customer.company || `${invoice.customer.firstName} ${invoice.customer.lastName}`;
+      for (const li of lineItems) {
+        rows.push(
+          [
+            invoice.invoiceNumber,
+            invoice.createdAt.toISOString().slice(0, 10),
+            invoice.dueDate ? invoice.dueDate.toISOString().slice(0, 10) : "",
+            escape(customerName),
+            escape(invoice.customer.email ?? ""),
+            escape(li.description),
+            String(li.quantity),
+            li.unitPrice.toFixed(2),
+            (li.quantity * li.unitPrice).toFixed(2),
+            Number(invoice.taxAmount).toFixed(2),
+            Number(invoice.total).toFixed(2),
+            invoice.status,
+          ].join(","),
+        );
+      }
+    }
+
+    return rows.join("\n");
   }
 }

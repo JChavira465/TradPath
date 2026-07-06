@@ -149,6 +149,18 @@ export default function InvoiceDetailPage() {
         </div>
       </div>
 
+      {invoice.includePhotos && invoice.photoUrls.length > 0 && (
+        <div className="rounded-lg border bg-white p-4">
+          <div className="mb-2 font-medium text-navy">Before / After Photos</div>
+          <div className="grid grid-cols-3 gap-2">
+            {invoice.photoUrls.map((url, i) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img key={i} src={url} alt={`Job photo ${i + 1}`} className="aspect-square rounded-md object-cover" />
+            ))}
+          </div>
+        </div>
+      )}
+
       {invoice.payments && invoice.payments.length > 0 && (
         <div className="rounded-lg border bg-white p-4">
           <div className="mb-2 font-medium text-navy">Payment History</div>

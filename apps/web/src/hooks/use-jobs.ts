@@ -68,3 +68,35 @@ export function useCompleteJob(id: string) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["jobs"] }),
   });
 }
+
+export interface JobPhotoSummary {
+  id: string;
+  url: string;
+  type: "BEFORE" | "AFTER" | "DURING" | "SIGNATURE" | "DOCUMENT";
+  isCustomerVisible: boolean;
+}
+
+export function useJobPhotos(jobId: string) {
+  return useQuery({
+    queryKey: ["jobs", jobId, "photos"],
+    queryFn: async () => (await apiClient.get<JobPhotoSummary[]>(`/jobs/${jobId}/photos`)).data,
+    enabled: !!jobId,
+  });
+}
+
+export function useUploadSignature(jobId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ blob, role }: { blob: Blob; role: "CUSTOMER" | "TECHNICIAN" }) => {
+      const form = new FormData();
+      form.append("file", blob, "signature.png");
+      form.append("role", role);
+      return (
+        await apiClient.post(`/jobs/${jobId}/signature`, form, {
+          headers: { "Content-Type": "multipart/form-data" },
+        })
+      ).data;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["jobs", jobId, "photos"] }),
+  });
+}
