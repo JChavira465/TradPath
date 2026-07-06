@@ -15,6 +15,7 @@ import { AuditLogsModule } from "./audit-logs/audit-logs.module";
 import { SystemHealthModule } from "./system-health/system-health.module";
 import { SupportTicketsModule } from "./support/support-tickets.module";
 import { AnnouncementsModule } from "./announcements/announcements.module";
+import { PlatformReportsModule } from "./platform-reports/platform-reports.module";
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { AnnouncementsModule } from "./announcements/announcements.module";
     SystemHealthModule,
     SupportTicketsModule,
     AnnouncementsModule,
+    PlatformReportsModule,
   ],
   controllers: [AdminAuthController, ImpersonationController, ImpersonationSessionController],
   providers: [AdminAuthService],
