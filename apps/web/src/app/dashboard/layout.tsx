@@ -2,6 +2,7 @@
 
 import { DashboardSidebar } from "@/components/layout/dashboard-sidebar";
 import { RequireAuth } from "@/components/layout/require-auth";
+import { ImpersonationBanner } from "@/components/impersonation/impersonation-banner";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { apiClient } from "@/lib/api-client";
 import { useAuthStore } from "@/store/auth-store";
@@ -33,6 +34,9 @@ function DashboardHeader() {
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <RequireAuth>
+      <div className="sticky top-0 z-50">
+        <ImpersonationBanner />
+      </div>
       <div className="flex min-h-screen">
         <DashboardSidebar />
         <div className="flex flex-1 flex-col">
