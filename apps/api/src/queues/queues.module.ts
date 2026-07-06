@@ -6,6 +6,7 @@ import {
   EQUIPMENT_ALERTS_QUEUE,
   INVOICE_FOLLOW_UP_QUEUE,
   MORNING_BRIEFING_QUEUE,
+  ONBOARDING_EMAIL_SEQUENCE_QUEUE,
   SERVICE_PLAN_BILLING_QUEUE,
   SERVICE_PLAN_EXPIRY_QUEUE,
   SERVICE_PLAN_JOB_GENERATOR_QUEUE,
@@ -22,9 +23,13 @@ import { EquipmentAlertsProcessor } from "./equipment-alerts.processor";
 import { EquipmentAlertsScheduler } from "./equipment-alerts.scheduler";
 import { MorningBriefingProcessor } from "./morning-briefing.processor";
 import { MorningBriefingScheduler } from "./morning-briefing.scheduler";
+import { OnboardingEmailSequenceProcessor } from "./onboarding-email-sequence.processor";
+import { OnboardingEmailSequenceScheduler } from "./onboarding-email-sequence.scheduler";
+import { OnboardingModule } from "../onboarding/onboarding.module";
 
 @Module({
   imports: [
+    OnboardingModule,
     BullModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -51,6 +56,7 @@ import { MorningBriefingScheduler } from "./morning-briefing.scheduler";
       { name: SERVICE_PLAN_EXPIRY_QUEUE },
       { name: EQUIPMENT_ALERTS_QUEUE },
       { name: MORNING_BRIEFING_QUEUE },
+      { name: ONBOARDING_EMAIL_SEQUENCE_QUEUE },
     ),
   ],
   providers: [
@@ -65,6 +71,8 @@ import { MorningBriefingScheduler } from "./morning-briefing.scheduler";
     EquipmentAlertsScheduler,
     MorningBriefingProcessor,
     MorningBriefingScheduler,
+    OnboardingEmailSequenceProcessor,
+    OnboardingEmailSequenceScheduler,
   ],
   exports: [BullModule],
 })

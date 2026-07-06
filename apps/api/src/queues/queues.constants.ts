@@ -5,3 +5,4 @@ export const SERVICE_PLAN_REMINDER_QUEUE = "service-plan-reminder";
 export const SERVICE_PLAN_EXPIRY_QUEUE = "service-plan-expiry";
 export const EQUIPMENT_ALERTS_QUEUE = "equipment-alerts";
 export const MORNING_BRIEFING_QUEUE = "morning-briefing";
+export const ONBOARDING_EMAIL_SEQUENCE_QUEUE = "onboarding-email-sequence";

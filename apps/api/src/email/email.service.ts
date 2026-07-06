@@ -1,6 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import sgMail from "@sendgrid/mail";
+import { PrismaService } from "../prisma/prisma.service";
 
 export interface SendEmailInput {
   to: string;
@@ -14,7 +15,10 @@ export class EmailService {
   private readonly logger = new Logger(EmailService.name);
   private configured = false;
 
-  constructor(private readonly config: ConfigService) {
+  constructor(
+    private readonly config: ConfigService,
+    private readonly prisma: PrismaService,
+  ) {
     const apiKey = this.config.get<string>("SENDGRID_API_KEY");
     if (apiKey) {
       sgMail.setApiKey(apiKey);
@@ -28,6 +32,12 @@ export class EmailService {
   async send(input: SendEmailInput): Promise<boolean> {
     if (!this.configured) {
       this.logger.warn({ event: "email.not_configured", to: input.to, subject: input.subject });
+      return false;
+    }
+
+    const suppressed = await this.prisma.emailSuppression.findUnique({ where: { email: input.to } });
+    if (suppressed) {
+      this.logger.log({ event: "email.suppressed", to: input.to, subject: input.subject });
       return false;
     }
 

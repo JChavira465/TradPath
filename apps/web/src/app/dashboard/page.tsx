@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useDashboardSummary } from "@/hooks/use-dashboard";
 import { JobStatusBadge } from "@/components/jobs/job-status-badge";
+import { OnboardingChecklistWidget } from "@/components/onboarding/onboarding-checklist";
 import { Button } from "@/components/ui/button";
 
 function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
@@ -50,6 +51,8 @@ export default function DashboardPage() {
           </Link>
         </div>
       </div>
+
+      <OnboardingChecklistWidget />
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
         <StatCard label="Today's Jobs" value={String(data.todayJobs.length)} />
