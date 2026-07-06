@@ -10,6 +10,7 @@ import { ExecutiveDashboardModule } from "./executive-dashboard/executive-dashbo
 import { CompaniesModule } from "./companies/companies.module";
 import { AdminUsersModule } from "./users/admin-users.module";
 import { BillingModule } from "./billing/billing.module";
+import { FeatureFlagsModule } from "./feature-flags/feature-flags.module";
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { BillingModule } from "./billing/billing.module";
     CompaniesModule,
     AdminUsersModule,
     BillingModule,
+    FeatureFlagsModule,
   ],
   controllers: [AdminAuthController, ImpersonationController, ImpersonationSessionController],
   providers: [AdminAuthService],
