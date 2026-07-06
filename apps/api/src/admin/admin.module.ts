@@ -6,6 +6,8 @@ import { AdminAuthService } from "./auth/admin-auth.service";
 import { ImpersonationController } from "./impersonation/impersonation.controller";
 import { ImpersonationSessionController } from "./impersonation/impersonation-session.controller";
 import { AuthModule } from "../auth/auth.module";
+import { ExecutiveDashboardModule } from "./executive-dashboard/executive-dashboard.module";
+import { CompaniesModule } from "./companies/companies.module";
 
 @Module({
   imports: [
@@ -15,6 +17,8 @@ import { AuthModule } from "../auth/auth.module";
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({ secret: config.get<string>("JWT_SECRET") }),
     }),
+    ExecutiveDashboardModule,
+    CompaniesModule,
   ],
   controllers: [AdminAuthController, ImpersonationController, ImpersonationSessionController],
   providers: [AdminAuthService],
