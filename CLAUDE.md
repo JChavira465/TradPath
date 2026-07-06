@@ -717,7 +717,7 @@ locally):
 | Upstash | Redis / Bull / rate limiting | Sprint 1 | ✅ Connected (dev + prod) |
 | Railway | API hosting | deploy | ✅ Deployed, live, healthy |
 | Vercel | Web + admin hosting | deploy | ⬜ Not yet deployed |
-| Stripe | Payments, subscriptions, webhooks | Sprint 4, 4B | ⚠️ Test key present but is the literal `sk_test_xxx` placeholder — not a real Stripe account. Webhook not yet pointed at Railway. |
+| Stripe | Payments, subscriptions, webhooks | Sprint 4, 4B | ✅ Real test-mode keys connected (Railway + local). Webhook endpoint created pointing at Railway; raw-body signature verification (S6) live-verified: valid signature accepted, forged signature rejected (400), duplicate event id correctly skipped (idempotency). |
 | SendGrid | Transactional + sequence email | Sprint 8B | ⬜ Not connected — domain verification not started |
 | Twilio | SMS, business texting | Sprint 4C, 4E | ⬜ Not connected |
 | OpenAI | Voice-to-invoice | Sprint 6B | ⬜ Not connected — Sprint 6B never verified against a real Whisper/GPT-4o call |
@@ -791,3 +791,22 @@ from chat history that may no longer exist.
   done on its own terms (guards/impersonation/audit logging were
   all live-verified), but both should be resolved before the
   September 2026 beta launch.
+- Connected real Stripe test-mode keys and created the production
+  webhook endpoint (via the Stripe API directly, targeting the
+  live Railway URL). Live-verified all three S6 behaviors against
+  the deployed endpoint with hand-signed HMAC payloads: valid
+  signature accepted, forged signature rejected (400), duplicate
+  event id skipped (idempotency via WebhookEvent).
+- **Gotcha for future sessions:** `apps/api` has its own `.env`
+  file, separate from the repo-root `.env`. NestJS's
+  `dotenv.config()` call in `main.ts` resolves relative to
+  `process.cwd()`, and the API is normally run with cwd=`apps/api`
+  (`cd apps/api && npm run dev`, and Railway's build/start also
+  runs from that directory) — so `apps/api/.env` is the one that
+  actually gets loaded, not the root one. The two had drifted
+  out of sync once already (root `.env` had real Stripe keys,
+  `apps/api/.env` still had the `sk_test_xxx` placeholder),
+  causing a real "Invalid API Key" failure. Whenever you edit
+  root `.env`, mirror the same change into `apps/api/.env`, or
+  check both before assuming a new credential is actually live
+  locally.
