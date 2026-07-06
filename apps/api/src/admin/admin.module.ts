@@ -13,6 +13,8 @@ import { BillingModule } from "./billing/billing.module";
 import { FeatureFlagsModule } from "./feature-flags/feature-flags.module";
 import { AuditLogsModule } from "./audit-logs/audit-logs.module";
 import { SystemHealthModule } from "./system-health/system-health.module";
+import { SupportTicketsModule } from "./support/support-tickets.module";
+import { AnnouncementsModule } from "./announcements/announcements.module";
 
 @Module({
   imports: [
@@ -29,6 +31,8 @@ import { SystemHealthModule } from "./system-health/system-health.module";
     FeatureFlagsModule,
     AuditLogsModule,
     SystemHealthModule,
+    SupportTicketsModule,
+    AnnouncementsModule,
   ],
   controllers: [AdminAuthController, ImpersonationController, ImpersonationSessionController],
   providers: [AdminAuthService],
