@@ -32,7 +32,7 @@ export class StripeWebhookService {
         await this.onStripeInvoicePaymentSucceeded(event.data.object as Stripe.Invoice);
         break;
       case "invoice.payment_failed":
-        this.logger.warn({ event: "stripe.invoice.payment_failed", stripeInvoiceId: (event.data.object as Stripe.Invoice).id });
+        await this.onStripeInvoicePaymentFailed(event.data.object as Stripe.Invoice);
         break;
       case "customer.subscription.updated":
         await this.onSubscriptionUpdated(event.data.object as Stripe.Subscription);
@@ -103,6 +103,38 @@ export class StripeWebhookService {
     // matched by stripeInvoiceId once that flow exists; nothing to do yet
     // for one-time invoices, which use payment_intent.succeeded instead.
     this.logger.debug({ event: "stripe.invoice.payment_succeeded", stripeInvoiceId: stripeInvoice.id });
+  }
+
+  // Feeds the Super Admin Billing section (Sprint 9) — the Stripe customer
+  // on a failed invoice is either an org's OWN platform-subscription
+  // customer or one of that org's end-customers (service-plan billing);
+  // check both so the row can carry an organizationId when derivable.
+  private async onStripeInvoicePaymentFailed(stripeInvoice: Stripe.Invoice) {
+    const stripeCustomerId = typeof stripeInvoice.customer === "string" ? stripeInvoice.customer : stripeInvoice.customer?.id;
+
+    let organizationId: string | undefined;
+    if (stripeCustomerId) {
+      const org = await this.prisma.organization.findFirst({ where: { stripeCustomerId }, select: { id: true } });
+      if (org) {
+        organizationId = org.id;
+      } else {
+        const customer = await this.prisma.customer.findFirst({ where: { stripeCustomerId }, select: { organizationId: true } });
+        organizationId = customer?.organizationId;
+      }
+    }
+
+    await this.prisma.failedPayment.create({
+      data: {
+        organizationId,
+        stripeInvoiceId: stripeInvoice.id,
+        stripeCustomerId,
+        customerEmail: stripeInvoice.customer_email ?? undefined,
+        amount: (stripeInvoice.amount_due ?? 0) / 100,
+        reason: stripeInvoice.last_finalization_error?.message,
+      },
+    });
+
+    this.logger.warn({ event: "stripe.invoice.payment_failed", stripeInvoiceId: stripeInvoice.id, organizationId });
   }
 
   // S6 — Sprint 4B webhook-driven ServicePlan <-> Stripe subscription
